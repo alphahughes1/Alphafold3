@@ -117,7 +117,7 @@ The top-level structure of the input JSON is:
   "userCCD": "...",  # Optional, mutually exclusive with userCCDPath.
   "userCCDPath": "...",  # Optional, mutually exclusive with userCCD.
   "dialect": "alphafold3",  # Required.
-  "version": 3  # Required.
+  "version": 4  # Required.
 }
 ```
 
@@ -166,6 +166,8 @@ The top-level `version` field (for the `alphafold3` dialect) can be either `1`,
     added fields `unpairedMsaPath`, `pairedMsaPath`, and `mmcifPath`.
 *   `3`: added the option of specifying external user-provided CCD using newly
     added field `userCCDPath`.
+*   `4`: added the option of specifying textual `description` of protein chains,
+    RNA chains, DNA chains, or ligands.
 
 ## Sequences
 
@@ -186,6 +188,7 @@ Specifies a single protein chain.
       {"ptmType": "HY3", "ptmPosition": 1},
       {"ptmType": "P1L", "ptmPosition": 5}
     ],
+    "description": ...,  # Optional.
     "unpairedMsa": ...,  # Mutually exclusive with unpairedMsaPath.
     "unpairedMsaPath": ...,  # Mutually exclusive with unpairedMsa.
     "pairedMsa": ...,  # Mutually exclusive with pairedMsaPath.
@@ -207,6 +210,9 @@ The fields specify the following:
     post-translational modifications. Each modification is specified using its
     CCD code and 1-based residue position. In the example above, we see that the
     first residue won't be a proline (`P`) but instead `HY3`.
+*   `description: str`: An optional textual description of this chain. This
+    field will is only used in the JSON format and serves as a comment
+    describing this chain.
 *   `unpairedMsa: str`: An optional multiple sequence alignment for this chain.
     This is specified using the A3M format (equivalent to the FASTA format, but
     also allows gaps denoted by the hyphen `-` character). See more details
@@ -239,6 +245,7 @@ Specifies a single RNA chain.
       {"modificationType": "2MG", "basePosition": 1},
       {"modificationType": "5MC", "basePosition": 4}
     ],
+    "description": ...,  # Optional.
     "unpairedMsa": ...,  # Mutually exclusive with unpairedMsaPath.
     "unpairedMsaPath": ...  # Mutually exclusive with unpairedMsa.
   }
@@ -255,6 +262,9 @@ The fields specify the following:
     letters `A`, `C`, `G`, `U`.
 *   `modifications: list[RnaModification]`: An optional list of modifications.
     Each modification is specified using its CCD code and 1-based base position.
+*   `description: str`: An optional textual description of this chain. This
+    field will is only used in the JSON format and serves as a comment
+    describing this chain.
 *   `unpairedMsa: str`: An optional multiple sequence alignment for this chain.
     This is specified using the A3M format. See more details below.
 *   `unpairedMsaPath: str`: An optional path to a file that contains the
@@ -275,7 +285,8 @@ Specifies a single DNA chain.
     "modifications": [
       {"modificationType": "6OG", "basePosition": 1},
       {"modificationType": "6MA", "basePosition": 2}
-    ]
+    ],
+    "description": ...  # Optional.
   }
 }
 ```
@@ -290,6 +301,9 @@ The fields specify the following:
     letters `A`, `C`, `G`, `T`.
 *   `modifications: list[DnaModification]`: An optional list of modifications.
     Each modification is specified using its CCD code and 1-based base position.
+*   `description: str`: An optional textual description of this chain. This
+    field will is only used in the JSON format and serves as a comment
+    describing this chain.
 
 ### Ligands
 
@@ -314,19 +328,22 @@ Specifies a single ligand. Ligands can be specified using 3 different formats:
 {
   "ligand": {
     "id": ["G", "H", "I"],
-    "ccdCodes": ["ATP"]
+    "ccdCodes": ["ATP"],
+    "description": ...  # Optional.
   }
 },
 {
   "ligand": {
     "id": "J",
-    "ccdCodes": ["LIG-1337"]
+    "ccdCodes": ["LIG-1337"],
+    "description": ...  # Optional.
   }
 },
 {
   "ligand": {
     "id": "K",
-    "smiles": "CC(=O)OC1C[NH+]2CCC1CC2"
+    "smiles": "CC(=O)OC1C[NH+]2CCC1CC2",
+    "description": ...  # Optional.
   }
 }
 ```
@@ -342,6 +359,9 @@ The fields specify the following:
     [user-provided CCD](#user-provided-ccd).
 *   `smiles: str`: An optional string defining the ligand using a SMILES string.
     The SMILES string must be correctly JSON-escaped.
+*   `description: str`: An optional textual description of this chain. This
+    field will is only used in the JSON format and serves as a comment
+    describing this ligand.
 
 Each ligand may be specified using CCD codes or SMILES but not both, i.e. for a
 given ligand, the `ccdCodes` and `smiles` fields are mutually exclusive.
@@ -404,10 +424,11 @@ the paper.
 
 RNA `unpairedMsa` can be either:
 
-1.  Unset (or set explicitly to `null`). AlphaFold 3 won't build MSA for this
-    RNA chain.
-2.  Set to an empty string (`""`). AlphaFold 3 won't build MSA and will run
-    MSA-free for this RNA chain.
+1.  Unset (or set explicitly to `null`). AlphaFold 3 will build MSA for this RNA
+    chain automatically. This is the recommended option.
+2.  Set to an empty string (`""`). AlphaFold 3 won't build the MSA for this RNA
+    chain and the MSA input to the model will be just the RNA chain (equivalent
+    to running MSA-free for this RNA chain).
 3.  Set to a non-empty A3M string. AlphaFold 3 will use the provided MSA for
     this RNA chain.
 
@@ -418,7 +439,7 @@ unpaired MSA (see [MSA Pairing](#msa-pairing) below for more details).
 
 The following combinations are valid for a given protein chain:
 
-1.  Both `unpairedMsa` and `pairedMsa` fields are unset (or explicitly set to
+1.  Both `unpairedMsa` and `pairedMsa` fields are unset (or set explicitly to
     `null`), AlphaFold 3 will build both MSAs automatically. This is the
     recommended option.
 2.  The `unpairedMsa` is set to to a non-empty A3M string, `pairedMsa` set to an
@@ -485,6 +506,12 @@ opposed to relying on name-matching post-processing heuristics used for
 
 When setting `unpairedMsa` manually, the `pairedMsa` must be explicitly set to
 an empty string (`""`).
+
+Make sure to run with `--resolve_msa_overlaps=false`. This prevents
+deduplication of the unpaired MSA within each chain against the paired MSA
+sequences. Even if you set `pairedMsa` to an empty string, the query sequence(s)
+will still be added in there and the deduplication procedure could destroy the
+carefully crafted sequence positioning in the unpaired MSA.
 
 For instance, if there are two chains `DEEP` and `MIND` which we want to be
 paired on organism A and C, we can achieve it as follows:
@@ -912,7 +939,9 @@ certain fields and the sequences are not biologically meaningful.
           {"ptmType": "HY3", "ptmPosition": 1},
           {"ptmType": "P1L", "ptmPosition": 5}
         ],
+        "description": "10-residue protein with 2 modifications",
         "unpairedMsa": ...,
+        "pairedMsa": ""
       }
     },
     {
@@ -974,7 +1003,6 @@ certain fields and the sequences are not biologically meaningful.
   ],
   "userCCD": ...,
   "dialect": "alphafold3",
-  "version": 3
+  "version": 4
 }
-
 ```

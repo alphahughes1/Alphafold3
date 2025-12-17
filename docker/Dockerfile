@@ -8,37 +8,47 @@
 # if received directly from Google. Use is subject to terms of use available at
 # https://github.com/google-deepmind/alphafold3/blob/main/WEIGHTS_TERMS_OF_USE.md
 
-FROM nvidia/cuda:12.6.0-base-ubuntu22.04
+FROM nvidia/cuda:12.6.3-base-ubuntu24.04
 
 # Some RUN statements are combined together to make Docker build run faster.
-# Get latest package listing, install software-properties-common, git, wget,
-# compilers and libraries.
-# git is required for pyproject.toml toolchain's use of CMakeLists.txt.
-# gcc, g++, make are required for compiling hmmer and AlphaFold 3 libaries.
-# zlib is a required dependency of AlphaFold 3.
-RUN apt update --quiet \
-    && apt install --yes --quiet software-properties-common \
-    && apt install --yes --quiet git wget gcc g++ make zlib1g-dev zstd
+# Get latest package listing, install python, git, wget, compilers and libs.
+# * git is required for pyproject.toml toolchain's use of CMakeLists.txt.
+# * gcc, g++, make are required for compiling HMMER and AlphaFold 3 libaries.
+# * zlib is a required dependency of AlphaFold 3.
+RUN DEBIAN_FRONTEND=noninteractive \
+    apt-get update --quiet \
+    && apt-get install --yes --quiet python3.12 python3-pip python3.12-venv python3.12-dev \
+    && apt-get install --yes --quiet git wget gcc g++ make zlib1g-dev zstd
 
-# Get apt repository of specific Python versions. Then install Python. Tell APT
-# this isn't an interactive TTY to avoid timezone prompt when installing.
-RUN add-apt-repository ppa:deadsnakes/ppa \
-    && DEBIAN_FRONTEND=noninteractive apt install --yes --quiet python3.11 python3-pip python3.11-venv python3.11-dev
-RUN python3.11 -m venv /alphafold3_venv
+# The base image uses Python 3.12. For local installation use 3.11 or greater.
+RUN python3 -m venv /alphafold3_venv
 ENV PATH="/hmmer/bin:/alphafold3_venv/bin:$PATH"
 # Update pip to the latest version. Not necessary in Docker, but good to do when
 # this is used as a recipe for local installation since we rely on new pip
 # features for secure installs.
-RUN pip3 install --upgrade pip
+RUN pip3 install --no-cache-dir --upgrade pip
 
 # Install HMMER. Do so before copying the source code, so that docker can cache
-# the image layer containing HMMER. Alternatively, you could also install it 
-# using `apt-get install hmmer` instead of bulding it from source.
+# the image layer containing HMMER. Alternatively, you could also install it
+# using `apt-get install hmmer` instead of bulding it from source, but we want
+# to have control over the exact version of HMMER and also apply the sequence
+# limit patch. Also note that eddylab.org unfortunately doesn't support HTTPS
+# and the tar file published on GitHub is explicitly not recommended to be used
+# for building from source.
+
+# Download, check hash, and extract the HMMER source code.
 RUN mkdir /hmmer_build /hmmer ; \
     wget http://eddylab.org/software/hmmer/hmmer-3.4.tar.gz --directory-prefix /hmmer_build ; \
-    (cd /hmmer_build && tar zxf hmmer-3.4.tar.gz && rm hmmer-3.4.tar.gz) ; \
-    (cd /hmmer_build/hmmer-3.4 && ./configure --prefix /hmmer) ; \
-    (cd /hmmer_build/hmmer-3.4 && make -j8) ; \
+    (cd /hmmer_build && echo "ca70d94fd0cf271bd7063423aabb116d42de533117343a9b27a65c17ff06fbf3 hmmer-3.4.tar.gz" | sha256sum --check) && \
+    (cd /hmmer_build && tar zxf hmmer-3.4.tar.gz && rm hmmer-3.4.tar.gz)
+
+# Apply the --seq_limit patch to HMMER.
+COPY docker/jackhmmer_seq_limit.patch /hmmer_build/
+RUN (cd /hmmer_build && patch -p0 < jackhmmer_seq_limit.patch)
+
+# Build HMMER.
+RUN (cd /hmmer_build/hmmer-3.4 && ./configure --prefix /hmmer) ; \
+    (cd /hmmer_build/hmmer-3.4 && make -j) ; \
     (cd /hmmer_build/hmmer-3.4 && make install) ; \
     (cd /hmmer_build/hmmer-3.4/easel && make install) ; \
     rm -R /hmmer_build
@@ -48,9 +58,11 @@ RUN mkdir /hmmer_build /hmmer ; \
 COPY . /app/alphafold
 WORKDIR /app/alphafold
 
-# Install the Python dependencies AlphaFold 3 needs.
-RUN pip3 install -r dev-requirements.txt
-RUN pip3 install --no-deps .
+# Install setuptools (removed in Python 3.12) which some libraries still need.
+# Then install the Python dependencies of AlphaFold 3.
+RUN pip3 install --no-cache-dir setuptools \
+    && pip3 install --no-cache-dir -r dev-requirements.txt \
+    && pip3 install --no-cache-dir --no-deps .
 # Build chemical components database (this binary was installed by pip).
 RUN build_data
 

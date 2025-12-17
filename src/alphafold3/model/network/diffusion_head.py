@@ -21,7 +21,6 @@ from alphafold3.model.network import atom_cross_attention
 from alphafold3.model.network import diffusion_transformer
 from alphafold3.model.network import featurization
 from alphafold3.model.network import noise_level_embeddings
-import chex
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -239,7 +238,6 @@ class DiffusionHead(hk.Module):
       act = enc.token_act
 
       # Token-token attention
-      chex.assert_shape(act, (None, self.config.per_token_channels))
       act = jnp.asarray(act, dtype=jnp.float32)
 
       act += hm.Linear(

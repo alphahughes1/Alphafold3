@@ -16,7 +16,6 @@ readme = "README.md"
 license = {file = "LICENSE"}
 dependencies = [
     "absl-py",
-    "chex",
     "dm-haiku==0.0.13",
     "dm-tree",
     "jax==0.4.34",

@@ -140,7 +140,6 @@ AlphaFold 3 uses the following separate libraries and packages:
 
 *   [abseil-cpp](https://github.com/abseil/abseil-cpp) and
     [abseil-py](https://github.com/abseil/abseil-py)
-*   [Chex](https://github.com/deepmind/chex)
 *   [Docker](https://www.docker.com)
 *   [DSSP](https://github.com/PDB-REDO/dssp)
 *   [HMMER Suite](https://github.com/EddyRivasLab/hmmer)
